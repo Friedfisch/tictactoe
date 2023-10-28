@@ -1,17 +1,15 @@
 package playground
 
 import (
-	"errors"
 	"fmt"
 )
 
-type Stone struct {
+type Move struct {
 	X, Y int
 }
 
 type PlayGround struct {
-	fields  [][]byte
-	events  [][]Stone
+	moves   [][]Move
 	size    int
 	players byte
 }
@@ -20,17 +18,13 @@ func NewPlayGround(size int, players byte) PlayGround {
 	if size < 1 {
 		panic("Size must be a positive int")
 	}
-	var r = make([][]byte, size)
-	for i := range r {
-		r[i] = make([]byte, size)
-	}
 
-	var s = make([][]Stone, players)
+	var s = make([][]Move, players)
 	for i := range s {
-		s[i] = make([]Stone, 0, size*size/2+1)
+		s[i] = make([]Move, 0, size*size/2)
 	}
 
-	return PlayGround{r, s, size, players}
+	return PlayGround{s, size, players}
 }
 
 func (pg PlayGround) Size() int {
@@ -41,18 +35,14 @@ func (pg PlayGround) Players() byte {
 	return pg.players
 }
 
-func (pg PlayGround) Board() [][]byte {
-	return pg.fields
-}
-
-func (pg PlayGround) Log(player byte) []Stone {
+func (pg PlayGround) Moves(player byte) []Move {
 	if player < 1 || player > pg.players {
 		panic("player out of range")
 	}
-	return pg.events[player-1]
+	return pg.moves[player-1]
 }
 
-func (pg PlayGround) Set(x, y int, player byte, overwrite bool) error {
+func (pg PlayGround) Set(x, y int, player byte) error {
 	if x < 0 || x >= pg.size {
 		panic("x out of range")
 	}
@@ -60,46 +50,38 @@ func (pg PlayGround) Set(x, y int, player byte, overwrite bool) error {
 		panic("y out of range")
 	}
 
-	stone := Stone{x, y}
-	if !overwrite {
-		if pg.fields[x][y] > 0 {
-			return errors.New("field in use")
-		}
-		// TODO overwrite check for event
-		for i := range pg.events {
-			for j := range pg.events[i] {
-				if pg.events[i][j].X == stone.X && pg.events[i][j].Y == stone.Y {
-					return errors.New("field in use")
-				}
+	stone := Move{x, y}
+
+	// We always overwrite, that means we need to remove if exists already
+out:
+	for i := range pg.moves {
+		for j := range pg.moves[i] {
+			if pg.moves[i][j].X == stone.X && pg.moves[i][j].Y == stone.Y {
+				pg.moves[i] = append(pg.moves[i][:j], pg.moves[i][j+1:]...)
+				break out
 			}
 		}
 	}
-	if player >= 1 && player <= pg.players {
-		pg.events[player-1] = append(pg.events[player-1], stone)
+
+	if player > 0 && player <= pg.players {
+		pg.moves[player-1] = append(pg.moves[player-1], stone)
 	}
-	pg.fields[x][y] = player
 	return nil
 }
 
 func (pg PlayGround) Reset() {
-	for i := range pg.events {
-		pg.events[i] = []Stone{}
-	}
-	// TODO there must be some better way
-	for i := 0; i < pg.size; i++ {
-		for j := 0; j < pg.size; j++ {
-			pg.Set(i, j, 0, true)
-		}
+	for i := range pg.moves {
+		pg.moves[i] = []Move{}
 	}
 }
 
-func (pg PlayGround) HasWonEvents(player byte) (result bool, i int, hrm string) {
+func (pg PlayGround) HasWon(player byte) (result bool, i int, hrm string) {
 	s := pg.size
-	events := pg.Log(player)
+	events := pg.Moves(player)
 	var rows = make([]int, s)
 	var cols = make([]int, s)
-	var ltr = 0 // Top-Left to Bottom-Right
-	var rtl = 0 // Bottom-Left to Top-Right
+	var ltr = 0
+	var rtl = 0
 	for _, event := range events {
 		i++
 		rows[event.X]++
@@ -111,21 +93,16 @@ func (pg PlayGround) HasWonEvents(player byte) (result bool, i int, hrm string) 
 			return true, i, fmt.Sprintf("Hit col %d", event.Y)
 		}
 
+		var x2 = max(event.X*2, s)
+		var y2 = max(event.Y*2, s)
+
 		// TODO Keep them in seperate cases until tests are done
-		if event.X*2 == s && event.Y*2 == s {
-			ltr++
-			rtl++
-		} else if event.X*2 >= s && event.Y*2 >= s {
-			ltr++
-		} else if event.X*2 >= s && event.Y*2 <= s {
-			rtl++
-		} else if event.X*2 <= s && event.Y*2 >= s {
-			rtl++
-		} else if event.X*2 <= s && event.Y*2 <= s {
+		if (x2 >= s && y2 >= s) || (x2 <= s && y2 <= s) {
 			ltr++
 		}
-		// else: X or Y is on middle line but not in center - cant be a hit
-
+		if (x2 >= s && y2 <= s) || (x2 <= s && y2 >= s) {
+			rtl++
+		}
 		if ltr == s {
 			return true, i, "Hit Top-Left to Bottom-Right"
 		}
@@ -135,49 +112,4 @@ func (pg PlayGround) HasWonEvents(player byte) (result bool, i int, hrm string) 
 	}
 
 	return false, i, "Miss"
-}
-
-func (pg PlayGround) HasWonBoard(player byte) (result bool, i int, hrm string) {
-	var s = pg.size
-	var f = pg.fields
-	var fr = 0
-	var fc = 0
-	var fd = 0
-	var fg = false
-	var y = 0
-	for x := 0; x < s && y < s; x++ {
-		i++
-		fg = false
-		if f[x][y] == player {
-			fr++
-			if fr == s {
-				return true, i, fmt.Sprintf("Hit row %d", x)
-			}
-			if x == y {
-				fg = true
-			}
-		}
-		if f[y][x] == player {
-			fc++
-			if fc == s {
-				return true, i, fmt.Sprintf("Hit col %d", y)
-			}
-			if s-1-y == x {
-				fg = true
-			}
-		}
-		if fg {
-			fd++
-			if fd == s {
-				return true, i, "Hit diag"
-			}
-		}
-
-		if x == s-1 {
-			x = -1
-			y++
-			fr = 0
-		}
-	}
-	return false, i, "Missed"
 }
