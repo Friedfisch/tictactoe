@@ -40,7 +40,7 @@ func setDiagRtL(t *testing.T, pg playground.PlayGround, player byte) {
 
 func draw(t *testing.T, pg playground.PlayGround) string {
 	t.Helper()
-	var fields [][]byte = make([][]byte, pg.Size())
+	var fields = make([][]byte, pg.Size())
 	for p := range fields {
 		fields[p] = make([]byte, pg.Size())
 	}
@@ -84,7 +84,35 @@ func assertEvents(t *testing.T, pg playground.PlayGround, name string, player by
 }
 
 func TestSet(t *testing.T) {
-	// TODO
+	var err error
+	f := playground.NewPlayGround(3, 2)
+	err = f.Set(0, 0, 1)
+	if err != nil {
+		t.Error("There should be 4 moves for player 1")
+		t.Fail()
+	}
+	r := f.Moves(1)
+	if len(r) != 1 {
+		t.Error("There should be 1 move for player 1")
+		t.Fail()
+	}
+	f.Set(0, 0, 2)
+	r = f.Moves(1)
+	if len(r) != 0 {
+		t.Error("There should be 0 moves for player 1")
+		t.Fail()
+	}
+	r = f.Moves(2)
+	if len(r) != 1 {
+		t.Error("There should be 1 move for player 2")
+		t.Fail()
+	}
+	f.Set(0, 0, 0)
+	r = f.Moves(2)
+	if len(r) != 0 {
+		t.Error("There should be 0 move for player 2")
+		t.Fail()
+	}
 }
 
 func TestReset(t *testing.T) {
