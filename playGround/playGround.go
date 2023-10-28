@@ -1,6 +1,7 @@
 package playground
 
 import (
+	"errors"
 	"fmt"
 )
 
@@ -44,15 +45,18 @@ func (pg PlayGround) Moves(player byte) []Move {
 
 func (pg PlayGround) Set(x, y int, player byte) error {
 	if x < 0 || x >= pg.size {
-		panic("x out of range")
+		return errors.New("x out of range")
 	}
 	if y < 0 || y >= pg.size {
-		panic("y out of range")
+		return errors.New("y out of range")
+	}
+	if player > pg.players {
+		return errors.New("player out of range")
 	}
 
 	stone := Move{x, y}
 
-	// We always overwrite, that means we need to remove if exists already
+	// We always overwrite, that means we need to remove it everywhere
 out:
 	for i := range pg.moves {
 		for j := range pg.moves[i] {
@@ -63,7 +67,7 @@ out:
 		}
 	}
 
-	if player > 0 && player <= pg.players {
+	if player > 0 {
 		pg.moves[player-1] = append(pg.moves[player-1], stone)
 	}
 	return nil
@@ -77,12 +81,12 @@ func (pg PlayGround) Reset() {
 
 func (pg PlayGround) HasWon(player byte) (result bool, i int, hrm string) {
 	s := pg.size
-	events := pg.Moves(player)
+	// Counters, we search for rows or columns or diagonals where "hits" match size.
 	var rows = make([]int, s)
 	var cols = make([]int, s)
 	var ltr = 0
 	var rtl = 0
-	for _, event := range events {
+	for _, event := range pg.Moves(player) {
 		i++
 		rows[event.X]++
 		if rows[event.X] == s {
@@ -93,21 +97,22 @@ func (pg PlayGround) HasWon(player byte) (result bool, i int, hrm string) {
 			return true, i, fmt.Sprintf("Hit col %d", event.Y)
 		}
 
+		// We are looking for half of the board without using float that works with un/even sizes
 		var x2 = max(event.X*2, s)
 		var y2 = max(event.Y*2, s)
 
-		// TODO Keep them in seperate cases until tests are done
 		if (x2 >= s && y2 >= s) || (x2 <= s && y2 <= s) {
 			ltr++
+			if ltr == s {
+				return true, i, "Hit Top-Left to Bottom-Right"
+			}
 		}
+
 		if (x2 >= s && y2 <= s) || (x2 <= s && y2 >= s) {
 			rtl++
-		}
-		if ltr == s {
-			return true, i, "Hit Top-Left to Bottom-Right"
-		}
-		if rtl == s {
-			return true, i, "Hit Bottom-Left to Top-Right"
+			if rtl == s {
+				return true, i, "Hit Bottom-Left to Top-Right"
+			}
 		}
 	}
 
